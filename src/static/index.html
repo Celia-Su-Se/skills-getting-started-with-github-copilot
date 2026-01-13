@@ -17,7 +17,24 @@
         <h3>Available Activities</h3>
         <div id="activities-list">
           <!-- Activities will be loaded here -->
-          <p>Loading activities...</p>
+          <p class="info-message">Loading activities...</p>
+
+          <!-- Template for activity cards; JS can clone and fill this -->
+          <template id="activity-card-template">
+            <div class="activity-card">
+              <h4 class="activity-name"></h4>
+              <p class="activity-description"></p>
+              <p class="activity-schedule"></p>
+              <p class="activity-capacity"></p>
+
+              <div class="participants-section">
+                <h5 class="participants-title">Participants</h5>
+                <ul class="participants-list">
+                  <!-- JS will insert <li>participant@mergington.edu</li> items here -->
+                </ul>
+              </div>
+            </div>
+          </template>
         </div>
       </section>
 
