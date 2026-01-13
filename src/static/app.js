@@ -7,6 +7,65 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const cardsByName = {};
 
+  // Helper: create participant <li> with mailto link and delete button
+  function createParticipantLi(email, activityName) {
+    const li = document.createElement("li");
+    li.className = "participant-row";
+
+    const a = document.createElement("a");
+    a.href = `mailto:${email}`;
+    a.textContent = email;
+    a.style.color = "inherit";
+    a.style.textDecoration = "none";
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "delete-participant";
+    del.title = "Unregister participant";
+    del.textContent = "×";
+
+    del.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      try {
+        const url = `/activities/${encodeURIComponent(activityName)}/participants?email=${encodeURIComponent(email)}`;
+        const res = await fetch(url, { method: "DELETE" });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.detail || body.message || "Delete failed");
+
+        // remove li from DOM
+        const parentUl = li.parentElement;
+        li.remove();
+
+        // if no participants left, add placeholder
+        if (parentUl && parentUl.children.length === 0) {
+          const placeholder = document.createElement("li");
+          placeholder.textContent = "No participants yet.";
+          parentUl.appendChild(placeholder);
+        }
+
+        // update capacity
+        const capEl = document.querySelector(`.activity-card[data-activity="${activityName}"] .activity-capacity`);
+        if (capEl) {
+          const match = capEl.textContent.match(/(\d+)\s*\/\s*(\d+)/);
+          if (match) {
+            const current = Math.max(0, parseInt(match[1], 10) - 1);
+            const max = parseInt(match[2], 10);
+            capEl.textContent = `Capacity: ${current}/${max}`;
+          }
+        }
+
+        showMessage(body.message || "Unregistered successfully.", "success");
+      } catch (err) {
+        showMessage(err.message || "Could not unregister.", "error");
+        console.error(err);
+      }
+    });
+
+    li.appendChild(a);
+    li.appendChild(del);
+    return li;
+  }
+
   function showMessage(text, type = "info") {
     messageEl.className = ""; // reset
     messageEl.classList.add("message", type);
@@ -36,14 +95,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ul.innerHTML = ""; // ensure empty
       if (data.participants && data.participants.length) {
         data.participants.forEach((p) => {
-          const li = document.createElement("li");
-          const a = document.createElement("a");
-          a.href = `mailto:${p}`;
-          a.textContent = p;
-          a.style.color = "inherit";
-          a.style.textDecoration = "none";
-          li.appendChild(a);
-          ul.appendChild(li);
+          ul.appendChild(createParticipantLi(p, name));
         });
       } else {
         const li = document.createElement("li");
@@ -52,7 +104,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       activitiesListEl.appendChild(clone);
-      cardsByName[name] = { participantsUl: ul, capacityEl: activitiesListEl.querySelector(`.activity-card[data-activity="${name}"] .activity-capacity`) };
+      // store max participants on the card element for reliable client-side updates
+      const cardEl = activitiesListEl.querySelector(`.activity-card[data-activity="${name}"]`);
+      if (cardEl) cardEl.dataset.max = data.max_participants;
+      cardsByName[name] = { participantsUl: ul, cardEl };
       // Add option to select
       const opt = document.createElement("option");
       opt.value = name;
@@ -99,25 +154,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const placeholder = Array.from(card.participantsUl.children).find(li => li.textContent === "No participants yet.");
         if (placeholder) placeholder.remove();
 
-        const li = document.createElement("li");
-        const a = document.createElement("a");
-        a.href = `mailto:${email}`;
-        a.textContent = email;
-        a.style.color = "inherit";
-        a.style.textDecoration = "none";
-        li.appendChild(a);
-        card.participantsUl.appendChild(li);
+        // add new participant with delete button
+        card.participantsUl.appendChild(createParticipantLi(email, activityName));
 
-        // Update capacity text
+        // Update capacity text by counting participant items (ignore placeholder)
         const capEl = document.querySelector(`.activity-card[data-activity="${activityName}"] .activity-capacity`);
-        if (capEl) {
-          // Try parse current numbers and increment participant count
-          const match = capEl.textContent.match(/(\d+)\s*\/\s*(\d+)/);
-          if (match) {
-            const current = parseInt(match[1], 10) + 1;
-            const max = parseInt(match[2], 10);
-            capEl.textContent = `Capacity: ${current}/${max}`;
-          }
+        if (capEl && card.cardEl) {
+          const items = Array.from(card.participantsUl.children).filter(li => li.textContent !== "No participants yet.");
+          const current = items.length;
+          const max = parseInt(card.cardEl.dataset.max, 10) || 0;
+          capEl.textContent = `Capacity: ${current}/${max}`;
         }
       }
 
